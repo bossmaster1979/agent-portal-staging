@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14100a">
+<title>Install the app — Agent Portal</title>
+<meta name="description" content="How to add the Agent Portal to your phone's home screen. No app store needed.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agent Portal">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brand">AGENT PORTAL<small>READY BUYERS FOR AGENTS</small></div>
+  <nav><a href="index.html">Sign in</a> <a href="board.html">Board</a> <a href="about.html">About</a></nav>
+</header>
+<div class="sample-banner">SAMPLE DEMO — no real buyers, no real people</div>
+<main class="wrap">
+  <h1>Install the app</h1>
+  <div class="gold-rule"></div>
+  <p>This app installs straight from your browser — no app store, no fee, no account to make. It is called a "PWA" (a web app that installs like an app). Once it is on your home screen it opens full-screen, like a normal app.</p>
+
+  <div class="card">
+    <h3>On iPhone (Safari)</h3>
+    <ol class="plain">
+      <li>Open this app in Safari.</li>
+      <li>Tap the Share button (the square with an arrow pointing up, at the bottom of the screen).</li>
+      <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+      <li>Tap <strong>Add</strong>. The gold Y icon appears on your home screen.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>On Android (Chrome)</h3>
+    <ol class="plain">
+      <li>Open this app in Chrome.</li>
+      <li>Tap the three dots in the top-right corner.</li>
+      <li>Tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
+      <li>Tap <strong>Install</strong>. The gold Y icon appears on your home screen.</li>
+    </ol>
+  </div>
+
+  <button class="btn" id="install-btn" style="display:none" onclick="installApp()">Install the app now</button>
+  <p class="muted">If the button above does not show, use the steps for your phone instead — some browsers only offer the install from their own menu.</p>
+  <p><a class="btn secondary" href="index.html">Back to sign in</a></p>
+  <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>renderTopbar();</script>
+</body>
+</html>

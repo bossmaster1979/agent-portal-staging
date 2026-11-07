@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14100a">
+<title>Handover sheet — Agent Portal</title>
+<meta name="description" content="Handover sheet for one claimed ready buyer. SAMPLE data only.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agent Portal">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brand">AGENT PORTAL<small>READY BUYERS FOR AGENTS</small></div>
+  <nav><a href="board.html">Board</a> <a href="my-leads.html">My leads</a> <a href="about.html">About</a> <a href="#" onclick="signOut(); return false;">Sign out</a></nav>
+</header>
+<div class="sample-banner">SAMPLE DEMO — this sheet is made-up example data</div>
+<main class="wrap">
+  <p class="muted" id="whoami"></p>
+  <div id="sheet"><p>Loading…</p></div>
+  <p><a href="my-leads.html">Back to my leads</a> · <a href="board.html">Back to the board</a></p>
+  <footer>Agent Portal · Demo only — SAMPLE data, no real people.</footer>
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  renderTopbar();
+  const agent = getAgent();
+  const id = new URLSearchParams(location.search).get("buyer");
+  const el = document.getElementById("sheet");
+  (async () => {
+    if (!agent) { location.href = "index.html"; return; }
+    const res = await loadHandoverData(id);
+    if (res.status === "not-signed-in") { location.href = "index.html"; return; }
+    if (res.status === "no-such-buyer") {
+      el.innerHTML = "<h1>No such buyer</h1><p>This handover sheet does not exist. Go back to the board.</p>";
+    } else if (res.status === "not-claimed") {
+      el.innerHTML = "<h1>Not claimed yet</h1><p>This buyer is still on the board. Claim them first — the handover sheet only shows after a claim.</p><p><a class=\"btn\" href=\"board.html\">Go to the board</a></p>";
+    } else if (res.status === "already-claimed") {
+      el.innerHTML = "<h1>Already claimed</h1><p class=\"refused\">This buyer was already claimed by " + esc(res.claimedByName) + ". One buyer goes to one agent only — you cannot see this sheet.</p><p><a class=\"btn\" href=\"board.html\">Back to the board</a></p>";
+    } else {
+      const buyer = res.buyer;
+      el.innerHTML =
+        '<h1>Handover sheet — <span class="sample-tag">SAMPLE</span> Ready buyer ' + esc(buyer.id) + '</h1>' +
+        '<div class="gold-rule"></div>' +
+        '<p>For ' + esc(agent.name) + '. Claimed ' + esc(res.claimedAt) + '.</p>' +
+        '<table>' +
+        '<tr><th>First name</th><td>' + esc(buyer.firstName) + ' (SAMPLE — made-up name)</td></tr>' +
+        '<tr><th>Phone</th><td>' + esc(buyer.phone) + ' (SAMPLE — made-up number)</td></tr>' +
+        '<tr><th>Email</th><td>' + esc(buyer.email) + ' (SAMPLE — made-up address)</td></tr>' +
+        '<tr><th>General area</th><td>' + esc(buyer.area) + '</td></tr>' +
+        '<tr><th>Rough budget range</th><td>' + esc(buyer.budget) + '</td></tr>' +
+        '<tr><th>Timeline</th><td>' + esc(buyer.timeline) + '</td></tr>' +
+        '<tr><th>Pre-approval</th><td>' + esc(buyer.preapproval) + '</td></tr>' +
+        '<tr><th>What they said they want</th><td>' + esc(buyer.wants) + '</td></tr>' +
+        '<tr><th>Booked call</th><td>' + esc(buyer.call) + ' — you call the buyer on the number above</td></tr>' +
+        '<tr><th>What we did NOT do</th><td>No price talk, no home picked, no terms discussed, no showing, no steering</td></tr>' +
+        '<tr><th>Text consent</th><td>' + esc(buyer.textConsent) + ' — recorded ' + esc(buyer.consentDate) + '</td></tr>' +
+        '<tr><th>Email consent</th><td>' + esc(buyer.emailConsent) + ' — recorded ' + esc(buyer.consentDate) + '</td></tr>' +
+        '<tr><th>Pass-on consent</th><td>' + esc(buyer.passOnConsent) + ' — recorded ' + esc(buyer.consentDate) + '</td></tr>' +
+        '<tr><th>Do-not-call check</th><td>Checked ' + esc(buyer.scrubDate) + '</td></tr>' +
+        '</table>' +
+        '<p>From here, the call, the home search, the showing, the offer, and the close are yours. Make the booked call on your own phone and number, inside 8am–9pm Pacific.</p>' +
+        '<p><a class="btn" href="my-leads.html">See my leads</a></p>';
+    }
+  })();
+</script>
+</body>
+</html>

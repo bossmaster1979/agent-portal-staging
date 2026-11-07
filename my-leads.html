@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14100a">
+<title>My leads — Agent Portal</title>
+<meta name="description" content="Buyers you claimed, with outcomes. SAMPLE buyers only.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agent Portal">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brand">AGENT PORTAL<small>READY BUYERS FOR AGENTS</small></div>
+  <nav><a href="board.html">Board</a> <a href="my-leads.html">My leads</a> <a href="about.html">About</a> <a href="#" onclick="signOut(); return false;">Sign out</a></nav>
+</header>
+<div class="sample-banner">SAMPLE DEMO — every buyer below is made up</div>
+<main class="wrap">
+  <p class="muted" id="whoami"></p>
+  <p class="muted" id="mode-note"></p>
+  <h1>My leads</h1>
+  <div class="gold-rule"></div>
+  <p>Buyers you claimed. Tap what happened after your call — it is saved on this phone only in demo mode, and shared with the server in live mode.</p>
+  <div id="mine"><p>Loading…</p></div>
+  <p><a href="board.html">Back to the board</a></p>
+  <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  renderTopbar();
+  const agent = getAgent();
+  if (!agent) { location.href = "index.html"; }
+  const labels = { "called": "Called — spoke to the buyer", "no-answer": "No answer", "closed": "Deal closed" };
+  (async () => {
+    const data = await loadMyLeadsData();
+    if (data.notSignedIn) { location.href = "index.html"; return; }
+    const el = document.getElementById("mine");
+    const mine = data.leads;
+    const outcomes = data.outcomes;
+    if (data.loadError) {
+      el.innerHTML = "<p><strong>Your leads did not load.</strong> Check your connection and try again.</p>";
+      return;
+    }
+    if (mine.length === 0) {
+      el.innerHTML = "<p>You have not claimed a buyer yet. <a href=\"board.html\">Go to the board</a> and claim one.</p>";
+    } else {
+      el.innerHTML = mine.map(b => {
+        const out = outcomes[b.id];
+        return '<div class="card"><h3><span class="sample-tag">SAMPLE</span> Ready buyer ' + esc(b.id) + ' — ' + esc(b.firstName) + '</h3>' +
+        '<p>' + esc(b.area) + ' · ' + esc(b.budget) + ' · ' + esc(b.timeline) + ' · Pre-approved: ' + esc(b.preapproval) + '</p>' +
+        '<p>Claimed ' + esc(b.claimedAt) + '</p>' +
+        (out ? '<p>Outcome: <span class="outcome">' + esc(labels[out]) + '</span></p>' : '<p>No outcome recorded yet.</p>') +
+        '<p>What happened?</p>' +
+        '<button class="btn" onclick="mark(\'' + b.id + '\', \'called\')">Called</button>' +
+        '<button class="btn secondary" onclick="mark(\'' + b.id + '\', \'no-answer\')">No answer</button>' +
+        '<button class="btn secondary" onclick="mark(\'' + b.id + '\', \'closed\')">Deal closed</button><br>' +
+        '<a class="btn secondary" href="handover.html?buyer=' + b.id + '">See handover sheet</a></div>';
+      }).join("");
+    }
+  })();
+  async function mark(id, outcome) { await recordOutcome(id, outcome); location.reload(); }
+</script>
+</body>
+</html>

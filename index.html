@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14100a">
+<title>Agent Portal</title>
+<meta name="description" content="Demo app for approved agents to see fresh ready buyers. SAMPLE buyers only.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agent Portal">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brand">AGENT PORTAL<small>READY BUYERS FOR AGENTS</small></div>
+  <nav><a href="index.html">Sign in</a> <a href="about.html">About</a> <a href="billing.html">Billing</a> <a href="install.html">Install the app</a></nav>
+</header>
+<div class="sample-banner">SAMPLE DEMO — no real buyers, no real people</div>
+<main class="wrap">
+  <h1>Agent Portal</h1>
+  <div class="gold-rule"></div>
+  <p>Fresh ready buyers, one at a time. Every buyer here answered the six readiness questions online and said yes to a call. You see the area, budget range, timeline, and pre-approval — never the name or phone number — until you claim that one buyer. One buyer goes to one agent only.</p>
+  <p class="muted" id="mode-note"></p>
+  <p class="muted">This is a demo. The buyers are made-up examples marked SAMPLE. Nothing here is a real person, and nothing is sent anywhere.</p>
+
+  <h2>Sign in</h2>
+  <p>Pick your name and type your passcode. Your passcode is the one Bge gave you by phone or text — never written in this app. If you forgot it, ask Bge for a new one.</p>
+  <p class="muted">Demo mode: no server is connected, so the passcode is not checked here — any passcode (or none) signs you in, and claims stay on this phone only.</p>
+  <p id="signin-error" class="refused" style="display:none"></p>
+  <div id="agent-list"></div>
+
+  <div class="card">
+    <h3>Put this app on your phone</h3>
+    <p>No app store, no download fee. It installs from this page, straight to your home screen.</p>
+    <button class="btn" id="install-btn" style="display:none" onclick="installApp()">Install the app</button>
+    <a class="btn secondary" href="install.html">How to add it to your home screen</a>
+  </div>
+
+  <p><a href="about.html">About the portal</a> · <a href="billing.html">Billing — $499 a month</a></p>
+  <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  renderTopbar();
+  document.getElementById("agent-list").innerHTML = AGENTS.map(a =>
+    '<div class="card"><h3>' + esc(a.name) + (a.sample ? ' <span class="sample-tag">SAMPLE</span>' : '') + '</h3>' +
+    '<p class="muted">' + esc(a.role) + '</p>' +
+    '<label>Passcode<br><input type="password" id="pass-' + a.id + '" autocomplete="current-password" placeholder="Your passcode"></label><br><br>' +
+    '<button class="btn" onclick="doSignIn(\'' + a.id + '\')">Sign in as ' + esc(a.name.split(" ")[0]) + '</button></div>'
+  ).join("");
+  async function doSignIn(id) {
+    const err = document.getElementById("signin-error");
+    err.style.display = "none";
+    const passcode = document.getElementById("pass-" + id).value;
+    const res = await signIn(id, passcode);
+    if (!res.ok) {
+      err.style.display = "block";
+      err.textContent =
+        res.error === "need-passcode" ? "Type your passcode first." :
+        res.error === "locked-out" ? "Too many wrong tries — locked out for 15 minutes. Ask Bge if you need a new passcode." :
+        "Wrong passcode — try again, or ask Bge for a new one.";
+    }
+  }
+</script>
+</body>
+</html>

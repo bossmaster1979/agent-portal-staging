@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14100a">
+<title>Ready-buyer board — Agent Portal</title>
+<meta name="description" content="Masked ready buyers for approved agents. SAMPLE buyers only.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agent Portal">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brand">AGENT PORTAL<small>READY BUYERS FOR AGENTS</small></div>
+  <nav><a href="board.html">Board</a> <a href="my-leads.html">My leads</a> <a href="billing.html">Billing</a> <a href="about.html">About</a> <a href="#" onclick="signOut(); return false;">Sign out</a></nav>
+</header>
+<div class="sample-banner">SAMPLE DEMO — every buyer below is made up</div>
+<main class="wrap">
+  <p class="muted" id="whoami"></p>
+  <p class="muted" id="mode-note"></p>
+  <h1>Ready-buyer board</h1>
+  <div class="gold-rule"></div>
+  <p><strong>Every buyer on this page is marked SAMPLE.</strong> They are made-up examples to show what the board looks like. They are not real people, and their budgets are not real budgets from real buyers.</p>
+  <p>You see only the area, budget range, timeline, pre-approval, and the date the buyer became ready. No name, no phone number, no email — those stay hidden until you claim that one buyer. When you claim a buyer, they leave this board at once, so no other agent can claim them. One buyer to one agent.</p>
+  <p>Every buyer here passed the checks first: do-not-call list checked, call + text + email consent recorded, not opted out. A buyer who fails any check never appears here.</p>
+  <div id="board"><p>Loading the board…</p></div>
+  <p><a href="my-leads.html">See my claimed leads</a></p>
+  <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+  renderTopbar();
+  const agent = getAgent();
+  if (!agent) { location.href = "index.html"; }
+
+  async function renderBoard() {
+    const data = await loadBoardData();
+    if (data.notSignedIn) { location.href = "index.html"; return; }
+    const el = document.getElementById("board");
+    if (data.loadError) {
+      el.innerHTML = "<p><strong>The board did not load.</strong> Check your connection and try again.</p>";
+      return;
+    }
+    const open = data.buyers.filter(b => !data.claims[b.id]);
+    if (open.length === 0) {
+      el.innerHTML = "<p><strong>No ready buyers on the board right now.</strong> Come back later — new ready buyers appear here when they pass the checks.</p>";
+    } else {
+      el.innerHTML = open.map(b =>
+        '<div class="card"><h3><span class="sample-tag">SAMPLE</span> Ready buyer ' + esc(b.id) + '</h3>' +
+        '<table><tr><th>Area</th><td>' + esc(b.area) + '</td></tr>' +
+        '<tr><th>Budget range</th><td>' + esc(b.budget) + '</td></tr>' +
+        '<tr><th>When</th><td>' + esc(b.timeline) + '</td></tr>' +
+        '<tr><th>Pre-approved</th><td>' + esc(b.preapproval) + '</td></tr>' +
+        '<tr><th>Ready since</th><td>' + esc(b.readySince) + '</td></tr>' +
+        '<tr><th>Checks</th><td><span class="check">Passed</span> — do-not-call checked ' + esc(b.scrubDate) + ', call / text / email consent recorded, not opted out.</td></tr></table>' +
+        '<button class="btn" onclick="doClaim(\'' + b.id + '\')">Claim this buyer</button></div>'
+      ).join("");
+    }
+  }
+  async function doClaim(id) {
+    if (isLive()) {
+      const res = await claimBuyerLive(id);
+      if (res.ok) { location.href = "handover.html?buyer=" + id; return; }
+      if (res.error === "not-signed-in") { location.href = "index.html"; return; }
+      alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
+      renderBoard();
+      return;
+    }
+    if (claimBuyer(id)) { location.href = "handover.html?buyer=" + id; }
+    else {
+      alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
+      location.reload();
+    }
+  }
+  renderBoard();
+  // Live mode: the board is re-read every 25 seconds, so a claim by
+  // another agent shows up here a few seconds later. There is no
+  // instant push — see the README. Demo mode needs no polling: the
+  // board only changes on this phone.
+  if (isLive()) setInterval(renderBoard, 25000);
+</script>
+</body>
+</html>

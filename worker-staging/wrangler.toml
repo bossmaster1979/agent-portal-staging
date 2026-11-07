@@ -1,0 +1,13 @@
+name = "agent-portal-worker-staging"
+main = "worker.js"
+compatibility_date = "2026-11-05"
+
+# D1 database for the Agent Portal (shared board, claims, outcomes).
+# The database_id below is a placeholder for local testing only.
+# At deploy time, replace it with the real id from `wrangler d1 create`
+# (see README.md). The Worker is NOT deployed yet — going live is the
+# owner's tap.
+[[d1_databases]]
+binding = "DB"
+database_name = "agent-portal-staging"
+database_id = "5f7366a9-47ef-4c78-bd84-d0dadcc59efe"

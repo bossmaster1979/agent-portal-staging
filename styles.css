@@ -1,0 +1,111 @@
+/* Agent Portal — gold/dark luxury, phone first. */
+:root {
+  --bg: #14100a;
+  --panel: #1e1810;
+  --panel2: #262015;
+  --gold: #c9a227;
+  --gold-bright: #e3c25a;
+  --cream: #f2ead8;
+  --muted: #c9bda3;
+  --line: #3a3120;
+  --green: #7fb069;
+  --red: #d64545;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--cream);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.5;
+}
+a { color: var(--gold-bright); }
+.wrap { max-width: 560px; margin: 0 auto; padding: 0 16px 48px; }
+.topbar {
+  background: #000;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.brand { font-size: 18px; letter-spacing: 1px; color: var(--gold); font-weight: bold; }
+.brand small { display: block; font-size: 12px; color: var(--muted); letter-spacing: 2px; }
+.topbar nav a { color: var(--cream); text-decoration: none; margin-left: 12px; font-size: 15px; }
+.topbar nav a:hover { color: var(--gold-bright); }
+.sample-banner {
+  background: var(--gold);
+  color: #14100a;
+  font-weight: bold;
+  text-align: center;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+h1 { font-size: 28px; margin: 20px 0 8px; color: var(--gold-bright); }
+h2 { font-size: 22px; margin: 24px 0 8px; color: var(--gold-bright); }
+.gold-rule { height: 2px; background: var(--gold); width: 64px; margin: 8px 0 16px; }
+p { margin: 10px 0; }
+.muted { color: var(--muted); font-size: 15px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 14px 0;
+}
+.card h3 { margin: 0 0 6px; font-size: 19px; color: var(--gold-bright); }
+.sample-tag {
+  display: inline-block;
+  background: var(--gold);
+  color: #14100a;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+.btn {
+  display: inline-block;
+  background: var(--gold);
+  color: #14100a;
+  font-weight: bold;
+  text-decoration: none;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 17px;
+  font-family: inherit;
+  cursor: pointer;
+  margin: 6px 6px 6px 0;
+}
+.btn:active { transform: translateY(1px); filter: brightness(.92); }
+.btn.secondary { background: transparent; color: var(--gold-bright); border: 1px solid var(--gold); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--gold); font-size: 14px; }
+.check { color: var(--green); font-weight: bold; }
+.refused { color: var(--red); font-weight: bold; }
+.outcome { font-weight: bold; color: var(--gold-bright); }
+ul.plain { padding-left: 20px; }
+ul.plain li { margin: 6px 0; }
+footer { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 12px; font-size: 14px; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+@media (max-width: 420px) { body { font-size: 16px; } h1 { font-size: 24px; } }
+
+/* Sign-in passcode box + billing page (added Nov 6, 2026). */
+input[type="password"] {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  background: #fff;
+  color: #222;
+  box-sizing: border-box;
+}
