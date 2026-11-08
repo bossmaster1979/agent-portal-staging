@@ -24,7 +24,7 @@
 /* THE ONE SETTING: put the Worker address here to go live, e.g.
    "https://agent-portal-worker.<your-name>.workers.dev".
    Leave it empty ("") and the app runs in DEMO mode. */
-const APP_CONFIG = { apiBase: "" };
+const APP_CONFIG = { apiBase: "https://agent-portal-worker-staging.bossmaster1979.workers.dev" };
 
 const LS_AGENT = "agentPortal.agent";
 const LS_CLAIMS = "agentPortal.claims";     // demo mode: { buyerId: { agentId, agentName, claimedAt } }
