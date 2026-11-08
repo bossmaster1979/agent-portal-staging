@@ -43,10 +43,8 @@ const WORKER = "http://localhost:8787";
 
 test("portal: sign-in, board masked, balance, claims deduct $100, cap of 3, handover gated, outcomes saved, SW registers", async ({ page }) => {
   const failed = [];
-  const dialogs = [];
   page.on("response", r => { if (r.status() >= 400) failed.push(r.url() + " -> " + r.status()); });
   page.on("pageerror", e => failed.push("pageerror: " + e.message));
-  page.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
 
   // 1. Sign-in page loads; two SAMPLE agents, passcode boxes.
   // Demo mode says plainly the passcode is not checked and nothing is sent.
@@ -112,11 +110,12 @@ test("portal: sign-in, board masked, balance, claims deduct $100, cap of 3, hand
   await expect(page.locator("#balance-line")).toContainText("Your balance: $200");
   await expect(page.locator("#balance-line")).toContainText("3 of 3 buyers waiting for a call");
 
-  // 7. The cap: a 4th claim is refused with the plain-words message.
-  // The alert comes after the claim round-trip, so poll for it.
+  // 7. The cap: a 4th claim is refused with the plain-words message,
+  // shown right on the board (not a pop-up box). The message comes
+  // after the claim round-trip, so the text check waits for it.
   await page.locator("#board .card", { hasText: "Ready buyer E" }).locator("button").click();
   await expect(page).toHaveURL(/board\.html/);
-  await expect.poll(() => dialogs[dialogs.length - 1]).toContain("3 buyers waiting for a call");
+  await expect(page.locator("#claim-error")).toContainText("3 buyers waiting for a call");
   await expect(page.locator("#board .card")).toHaveCount(1);
   await expect(page.locator("#balance-line")).toContainText("Your balance: $200");
 
@@ -231,9 +230,7 @@ test("live: per-lead claims, balance, cap, expiry refund, cross-context claim (W
   const p1 = await ctx1.newPage();
   const p2 = await ctx2.newPage();
   const failed = [];
-  const dialogs1 = [];
-  const dialogs2 = [];
-  for (const [p, dialogs] of [[p1, dialogs1], [p2, dialogs2]]) {
+  for (const p of [p1, p2]) {
     // 401 on a wrong passcode, 403 on a refused handover, and 403 on a
     // refused claim (not-enough-balance / claim-limit) are expected
     // answers in this test, not failures — skip those.
@@ -246,7 +243,6 @@ test("live: per-lead claims, balance, cap, expiry refund, cross-context claim (W
       }
     });
     p.on("pageerror", e => failed.push("pageerror: " + e.message));
-    p.on("dialog", d => { dialogs.push(d.message()); d.accept(); });
   }
 
   // Wrong passcode is refused, with a plain-words message, no redirect.
@@ -305,7 +301,7 @@ test("live: per-lead claims, balance, cap, expiry refund, cross-context claim (W
   await expect(p2.locator("#board .card")).toHaveCount(3);
   await p2.locator("#board .card", { hasText: "Ready buyer E" }).locator("button").click();
   await expect(p2).toHaveURL(/board\.html/);
-  await expect.poll(() => dialogs2[dialogs2.length - 1]).toContain("Not enough balance");
+  await expect(p2.locator("#claim-error")).toContainText("Not enough balance");
   await expect(p2.locator("#board .card")).toHaveCount(3);
   await expect(p2.locator("#balance-line")).toContainText("Your balance: $50");
 
@@ -325,7 +321,7 @@ test("live: per-lead claims, balance, cap, expiry refund, cross-context claim (W
   await expect(p1.locator("#board .card")).toHaveCount(1);
   await p1.locator("#board .card", { hasText: "Ready buyer G" }).locator("button").click();
   await expect(p1).toHaveURL(/board\.html/);
-  await expect.poll(() => dialogs1[dialogs1.length - 1]).toContain("3 buyers waiting for a call");
+  await expect(p1.locator("#claim-error")).toContainText("3 buyers waiting for a call");
   await expect(p1.locator("#board .card")).toHaveCount(1);
 
   // Context 1 records an outcome through the Worker; it sticks.

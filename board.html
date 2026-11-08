@@ -28,6 +28,7 @@
   <p>You see only the area, budget range, timeline, pre-approval, and the date the buyer became ready. No name, no phone number, no email — those stay hidden until you claim that one buyer. When you claim a buyer, they leave this board at once, so no other agent can claim them. One buyer to one agent.</p>
   <p>Every buyer here passed the checks first: do-not-call list checked, call + text + email consent recorded, not opted out. A buyer who fails any check never appears here.</p>
   <p id="balance-line"></p>
+  <p id="claim-error" class="refused" style="display:none"></p>
   <div id="board"><p>Loading the board…</p></div>
   <p><a href="my-leads.html">See my claimed leads</a></p>
   <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
@@ -70,39 +71,51 @@
       ).join("");
     }
   }
+  // A refused claim shows its reason right on the board, in plain
+  // words — not a pop-up box, which is easy to miss and invisible to
+  // a screen reader once dismissed. The message stays until the
+  // next claim attempt.
+  function showClaimError(msg) {
+    const err = document.getElementById("claim-error");
+    if (!err) return;
+    err.style.display = "block";
+    err.textContent = msg;
+  }
   async function doClaim(id) {
+    const err = document.getElementById("claim-error");
+    if (err) err.style.display = "none";
     if (isLive()) {
       const res = await claimBuyerLive(id);
       if (res.ok) { location.href = "handover.html?buyer=" + id; return; }
       if (res.error === "not-signed-in") { location.href = "index.html"; return; }
       if (res.error === "not-enough-balance") {
-        alert("Not enough balance — each claim costs $100. Top up by Zelle first (see Billing), then claim again.");
-        renderBoard();
+        await renderBoard();
+        showClaimError("Not enough balance — each claim costs $100. Top up by Zelle first (see Billing), then claim again.");
         return;
       }
       if (res.error === "claim-limit") {
-        alert("You already have 3 buyers waiting for a call. Call one and record the outcome first — that frees a slot.");
-        renderBoard();
+        await renderBoard();
+        showClaimError("You already have 3 buyers waiting for a call. Call one and record the outcome first — that frees a slot.");
         return;
       }
-      alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
-      renderBoard();
+      await renderBoard();
+      showClaimError("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
       return;
     }
     const res = claimBuyer(id);
     if (res.ok) { location.href = "handover.html?buyer=" + id; return; }
     if (res.error === "not-enough-balance") {
-      alert("Demo balance is empty — each claim costs $100. In live mode you would top up by Zelle first (see Billing).");
-      renderBoard();
+      await renderBoard();
+      showClaimError("Demo balance is empty — each claim costs $100. In live mode you would top up by Zelle first (see Billing).");
       return;
     }
     if (res.error === "claim-limit") {
-      alert("You already have 3 buyers waiting for a call. Call one and record the outcome first — that frees a slot.");
-      renderBoard();
+      await renderBoard();
+      showClaimError("You already have 3 buyers waiting for a call. Call one and record the outcome first — that frees a slot.");
       return;
     }
-    alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
-    location.reload();
+    await renderBoard();
+    showClaimError("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
   }
   renderBoard();
   // Live mode: the board is re-read every 25 seconds, so a claim by
