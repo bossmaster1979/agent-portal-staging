@@ -107,6 +107,9 @@ test("portal: sign-in, board masked, balance, claims deduct $100, cap of 3, hand
   await expect(page.locator("#sheet")).toContainText("(555) 010-1001");
   await expect(page.locator("#sheet")).toContainText("sam@example.com");
   await expect(page.locator("#sheet")).toContainText("Thu Nov 6 at 6:00 PM Pacific");
+  // The handover nav has the Billing link too (fixed Nov 7, 2026 —
+  // it was missing from My leads and Handover, only Board had it).
+  await expect(page.locator('nav a[href="billing.html"]')).toHaveCount(1);
 
   // 5. Board no longer shows buyer A (3 left); balance $400.
   await page.goto(BASE + "/board.html");
@@ -136,6 +139,7 @@ test("portal: sign-in, board masked, balance, claims deduct $100, cap of 3, hand
 
   // 8. My leads shows A, B, D; record "Called" on A; it sticks after reload.
   await page.goto(BASE + "/my-leads.html");
+  await expect(page.locator('nav a[href="billing.html"]')).toHaveCount(1);
   await expect(page.locator("#mine .card")).toHaveCount(3);
   await expect(page.locator("#mine")).toContainText("Ready buyer A");
   await expect(page.locator("#balance-line")).toContainText("Your balance: $200");
