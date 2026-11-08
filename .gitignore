@@ -1,0 +1,4 @@
+# Local-only wrangler state (dev servers, miniflare databases) and
+# dependencies. Never committed, never deployed.
+.wrangler/
+node_modules/
