@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clear cached app — Agent Portal</title>
+</head>
+<body>
+<main>
+<h1>Clearing the saved app…</h1>
+<p id="msg">Working…</p>
+<p><a href="index.html">Back to the sign-in page</a></p>
+</main>
+<script>
+(async () => {
+  const done = [];
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) { await r.unregister(); done.push("saved app removed"); }
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      for (const k of keys) { await caches.delete(k); done.push("saved copy deleted: " + k); }
+    }
+  } catch (e) {
+    document.getElementById("msg").textContent = "Could not clear automatically: " + e.message;
+    return;
+  }
+  document.getElementById("msg").textContent = done.length
+    ? "Cleared: " + done.join("; ") + ". Go back to the sign-in page — it will load fresh."
+    : "Nothing was saved here.";
+})();
+</script>
+</body>
+</html>
