@@ -25,6 +25,7 @@
   <h1>My leads</h1>
   <div class="gold-rule"></div>
   <p>Buyers you claimed. Tap what happened after your call — it is saved on this phone only in demo mode, and shared with the server in live mode.</p>
+  <p id="balance-line"></p>
   <div id="mine"><p>Loading…</p></div>
   <p><a href="board.html">Back to the board</a></p>
   <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
@@ -42,6 +43,11 @@
     const el = document.getElementById("mine");
     const mine = data.leads;
     const outcomes = data.outcomes;
+    const bal = document.getElementById("balance-line");
+    if (bal && typeof data.balanceCents === "number") {
+      bal.innerHTML = "<strong>Your balance: " + fmtMoney(data.balanceCents) + ".</strong> Each claim costs " +
+        fmtMoney(data.leadPriceCents) + ". " + '<a href="billing.html">How to top up</a>';
+    }
     if (data.loadError) {
       el.innerHTML = "<p><strong>Your leads did not load.</strong> Check your connection and try again.</p>";
       return;
@@ -53,7 +59,7 @@
         const out = outcomes[b.id];
         return '<div class="card"><h3><span class="sample-tag">SAMPLE</span> Ready buyer ' + esc(b.id) + ' — ' + esc(b.firstName) + '</h3>' +
         '<p>' + esc(b.area) + ' · ' + esc(b.budget) + ' · ' + esc(b.timeline) + ' · Pre-approved: ' + esc(b.preapproval) + '</p>' +
-        '<p>Claimed ' + esc(b.claimedAt) + '</p>' +
+        '<p>Claimed ' + esc(fmtWhen(b.claimedAt)) + '</p>' +
         (out ? '<p>Outcome: <span class="outcome">' + esc(labels[out]) + '</span></p>' : '<p>No outcome recorded yet.</p>') +
         '<p>What happened?</p>' +
         '<button class="btn" onclick="mark(\'' + b.id + '\', \'called\')">Called</button>' +

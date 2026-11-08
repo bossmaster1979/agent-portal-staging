@@ -27,6 +27,7 @@
   <p><strong>Every buyer on this page is marked SAMPLE.</strong> They are made-up examples to show what the board looks like. They are not real people, and their budgets are not real budgets from real buyers.</p>
   <p>You see only the area, budget range, timeline, pre-approval, and the date the buyer became ready. No name, no phone number, no email — those stay hidden until you claim that one buyer. When you claim a buyer, they leave this board at once, so no other agent can claim them. One buyer to one agent.</p>
   <p>Every buyer here passed the checks first: do-not-call list checked, call + text + email consent recorded, not opted out. A buyer who fails any check never appears here.</p>
+  <p id="balance-line"></p>
   <div id="board"><p>Loading the board…</p></div>
   <p><a href="my-leads.html">See my claimed leads</a></p>
   <footer>Agent Portal · Demo only — SAMPLE buyers, no real people.</footer>
@@ -46,6 +47,13 @@
       el.innerHTML = "<p><strong>The board did not load.</strong> Check your connection and try again.</p>";
       return;
     }
+    const bal = document.getElementById("balance-line");
+    if (bal && typeof data.balanceCents === "number") {
+      bal.innerHTML = "<strong>Your balance: " + fmtMoney(data.balanceCents) + ".</strong> Each claim costs " +
+        fmtMoney(data.leadPriceCents) + ". You have " + data.activeClaims + " of " + data.maxActiveClaims +
+        " buyers waiting for a call — call one first to free a slot. " +
+        '<a href="billing.html">How to top up</a>';
+    }
     const open = data.buyers.filter(b => !data.claims[b.id]);
     if (open.length === 0) {
       el.innerHTML = "<p><strong>No ready buyers on the board right now.</strong> Come back later — new ready buyers appear here when they pass the checks.</p>";
@@ -58,7 +66,7 @@
         '<tr><th>Pre-approved</th><td>' + esc(b.preapproval) + '</td></tr>' +
         '<tr><th>Ready since</th><td>' + esc(b.readySince) + '</td></tr>' +
         '<tr><th>Checks</th><td><span class="check">Passed</span> — do-not-call checked ' + esc(b.scrubDate) + ', call / text / email consent recorded, not opted out.</td></tr></table>' +
-        '<button class="btn" onclick="doClaim(\'' + b.id + '\')">Claim this buyer</button></div>'
+        '<button class="btn" onclick="doClaim(\'' + b.id + '\')">Claim this buyer — $100</button></div>'
       ).join("");
     }
   }
@@ -67,15 +75,34 @@
       const res = await claimBuyerLive(id);
       if (res.ok) { location.href = "handover.html?buyer=" + id; return; }
       if (res.error === "not-signed-in") { location.href = "index.html"; return; }
+      if (res.error === "not-enough-balance") {
+        alert("Not enough balance — each claim costs $100. Top up by Zelle first (see Billing), then claim again.");
+        renderBoard();
+        return;
+      }
+      if (res.error === "claim-limit") {
+        alert("You already have 3 buyers waiting for a call. Call one and record the outcome first — that frees a slot.");
+        renderBoard();
+        return;
+      }
       alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
       renderBoard();
       return;
     }
-    if (claimBuyer(id)) { location.href = "handover.html?buyer=" + id; }
-    else {
-      alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
-      location.reload();
+    const res = claimBuyer(id);
+    if (res.ok) { location.href = "handover.html?buyer=" + id; return; }
+    if (res.error === "not-enough-balance") {
+      alert("Demo balance is empty — each claim costs $100. In live mode you would top up by Zelle first (see Billing).");
+      renderBoard();
+      return;
     }
+    if (res.error === "claim-limit") {
+      alert("You already have 3 buyers waiting for a call. Call one and record the outcome first — that frees a slot.");
+      renderBoard();
+      return;
+    }
+    alert("Already claimed — this buyer already belongs to another agent. One buyer, one agent.");
+    location.reload();
   }
   renderBoard();
   // Live mode: the board is re-read every 25 seconds, so a claim by

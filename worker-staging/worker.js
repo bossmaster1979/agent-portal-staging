@@ -10,9 +10,16 @@
  *    ready, checks passed. Never names, phones, or emails.
  *  - Claims a buyer with ONE conditional UPDATE ("mark claimed only if
  *    nobody claimed it yet") so exactly one agent wins, even if two tap
- *    Claim at the same second.
+ *    Claim at the same second. A claim costs $100, taken off the
+ *    agent's balance (topped up by Zelle, $500 at a time, added by
+ *    Bge after checking the bank). An agent may hold at most 3 buyers
+ *    waiting for a call; a buyer with no call recorded in 48 hours
+ *    goes back on the board and the $100 goes back to the balance.
  *  - Records outcomes (called / no answer / deal closed).
  *  - Locks an agent out for a while after 5 wrong passcode guesses.
+ *  - Keeps a money ledger (top-ups, claims, refunds) so Bge can
+ *    check the books: balance is the sum of the ledger, and the
+ *    agent's stored balance must match it.
  *
  * Why one conditional UPDATE: D1 does not let code open a long
  * transaction with BEGIN/COMMIT (reported by developers in 2026), so
@@ -62,6 +69,15 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // a token lasts one day
 const MAX_WRONG_GUESSES = 5;               // lock after this many wrong tries
 const LOCKOUT_MS = 15 * 60 * 1000;         // locked out for 15 minutes
 const PBKDF2_ROUNDS = 100000;
+
+// Money — per-lead model, decided by the owner Nov 7, 2026 (replaces
+// $499/month). Joining is free; each claimed buyer costs $100.
+// Agents top up by Zelle ($500 at a time); Bge adds it by hand after
+// checking the bank. Amounts are in cents — never floats for money.
+const LEAD_PRICE_CENTS = 10000;            // $100 per claimed buyer
+const TOPUP_CENTS = 50000;                 // $500 per Zelle top-up
+const MAX_ACTIVE_CLAIMS = 3;               // buyers waiting for a call
+const CLAIM_CALL_WINDOW_MS = 48 * 60 * 60 * 1000; // call within 2 days
 
 export default {
   async fetch(request, env) {
@@ -152,7 +168,7 @@ async function agentFromToken(request, env) {
   ).bind(await sha256Hex(token)).first();
   if (!row || row.expires_at < Date.now()) return null;
   const agent = await env.DB.prepare(
-    "SELECT id, name FROM agents WHERE id = ? AND approved = 1"
+    "SELECT id, name, balance_cents FROM agents WHERE id = ? AND approved = 1"
   ).bind(row.agent_id).first();
   return agent || null;
 }
@@ -214,17 +230,66 @@ async function signin(request, env) {
   return json({ ok: true, token, agent: { id: agent.id, name: agent.name } });
 }
 
-/* ---- board: masked fields only, unclaimed buyers only ---- */
+/* ---- money: active claims, expiry, ledger ---- */
 
 const MASKED = "id, area, budget, timeline, preapproval, ready_since, scrub_date, pass_on_consent";
 
+// A claim counts as "active" (holding one of the agent's 3 slots)
+// while the buyer is claimed and no outcome is recorded yet. Once
+// the agent records called / no-answer / closed, the slot frees.
+async function activeClaimsCount(env, agentId) {
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM buyers b WHERE b.claimed_by = ? " +
+    "AND NOT EXISTS (SELECT 1 FROM outcomes o WHERE o.buyer_id = b.id)"
+  ).bind(agentId).first();
+  return row ? row.n : 0;
+}
+
+// Release buyers whose agent never called within 48 hours: the
+// buyer goes back on the board, the $100 goes back to the balance,
+// and both steps are written to the ledger. Runs lazily, at the
+// start of every board/claim/my-leads/handover read — no separate
+// timer needed, and a buyer is never shown as claimed past its
+// deadline on the next read after it. The release UPDATE is
+// conditional (still claimed by the same agent, same claimed_at),
+// so two reads at once can only release a buyer once; the refund
+// runs only when that UPDATE changed a row.
+async function releaseExpired(env) {
+  const cutoff = new Date(Date.now() - CLAIM_CALL_WINDOW_MS).toISOString();
+  const { results } = await env.DB.prepare(
+    "SELECT id, claimed_by, claimed_at FROM buyers " +
+    "WHERE claimed_by IS NOT NULL AND claimed_at < ? " +
+    "AND NOT EXISTS (SELECT 1 FROM outcomes o WHERE o.buyer_id = buyers.id)"
+  ).bind(cutoff).all();
+  for (const b of results) {
+    const released = await env.DB.prepare(
+      "UPDATE buyers SET claimed_by = NULL, claimed_at = NULL " +
+      "WHERE id = ? AND claimed_by = ? AND claimed_at = ?"
+    ).bind(b.id, b.claimed_by, b.claimed_at).run();
+    if (released.meta.changes === 1) {
+      await env.DB.prepare(
+        "UPDATE agents SET balance_cents = balance_cents + ? WHERE id = ?"
+      ).bind(LEAD_PRICE_CENTS, b.claimed_by).run();
+      await env.DB.prepare(
+        "INSERT INTO ledger (agent_id, kind, amount_cents, buyer_id, note, created_at) " +
+        "VALUES (?, 'refund', ?, ?, 'buyer back on board — no call in 48 hours', ?)"
+      ).bind(b.claimed_by, LEAD_PRICE_CENTS, b.id, new Date().toISOString()).run();
+    }
+  }
+}
+
 async function board(request, env, agent) {
+  await releaseExpired(env);
   const { results } = await env.DB.prepare(
     "SELECT " + MASKED + " FROM buyers WHERE claimed_by IS NULL ORDER BY ready_since, id"
   ).all();
   return json({
     ok: true,
     agent: { id: agent.id, name: agent.name },
+    balanceCents: agent.balance_cents,
+    leadPriceCents: LEAD_PRICE_CENTS,
+    maxActiveClaims: MAX_ACTIVE_CLAIMS,
+    activeClaims: await activeClaimsCount(env, agent.id),
     buyers: results.map(b => ({
       id: b.id, area: b.area, budget: b.budget, timeline: b.timeline,
       preapproval: b.preapproval, readySince: b.ready_since,
@@ -234,18 +299,41 @@ async function board(request, env, agent) {
   });
 }
 
-/* ---- claim: ONE conditional UPDATE — the safe step (see header) ---- */
-
+/* ---- claim: ONE conditional UPDATE — the safe step (see header) ----
+   Plus the money rules, in order: the buyer must still be free, the
+   agent must have a free slot (fewer than 3 buyers waiting for a
+   call), and the balance must cover the $100. The claim UPDATE is
+   the one atomic step; the $100 comes off only after it wins. If
+   the balance fell between the check and the deduction (two taps at
+   once), the claim is released again and the agent is told to top
+   up — never charged for a buyer they did not get. */
 async function claim(request, env, agent) {
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "bad-request" }, 400); }
   const buyerId = String(body.buyerId || "");
   if (!buyerId) return json({ ok: false, error: "missing" }, 400);
 
+  await releaseExpired(env);
+
   const buyer = await env.DB.prepare(
     "SELECT id, claimed_by FROM buyers WHERE id = ?"
   ).bind(buyerId).first();
   if (!buyer) return json({ ok: false, error: "no-such-buyer" }, 404);
+  if (buyer.claimed_by) return json({ ok: false, error: "already-claimed" }, 409);
+
+  // Slot check: at most 3 buyers waiting for a call.
+  if (await activeClaimsCount(env, agent.id) >= MAX_ACTIVE_CLAIMS) {
+    return json({ ok: false, error: "claim-limit", maxActiveClaims: MAX_ACTIVE_CLAIMS }, 403);
+  }
+
+  // Friendly balance check first (the deduction below is the real
+  // gate — this just gives the plain-words answer sooner).
+  const balance = await env.DB.prepare(
+    "SELECT balance_cents FROM agents WHERE id = ?"
+  ).bind(agent.id).first();
+  if (!balance || balance.balance_cents < LEAD_PRICE_CENTS) {
+    return json({ ok: false, error: "not-enough-balance", leadPriceCents: LEAD_PRICE_CENTS, balanceCents: balance ? balance.balance_cents : 0 }, 403);
+  }
 
   // The one safe step. Only succeeds when nobody claimed it yet.
   const now = new Date().toISOString();
@@ -253,17 +341,51 @@ async function claim(request, env, agent) {
     "UPDATE buyers SET claimed_by = ?, claimed_at = ? WHERE id = ? AND claimed_by IS NULL"
   ).bind(agent.id, now, buyerId).run();
 
-  if (result.meta.changes === 1) {
-    return json({ ok: true, buyerId, claimedBy: agent.id, claimedAt: now });
+  if (result.meta.changes !== 1) {
+    // 0 rows changed: someone else claimed it between the board read
+    // and this tap. The app shows "sorry, just claimed" and re-reads.
+    return json({ ok: false, error: "already-claimed" }, 409);
   }
-  // 0 rows changed: someone else claimed it between the board read
-  // and this tap. The app shows "sorry, just claimed" and re-reads.
-  return json({ ok: false, error: "already-claimed" }, 409);
+
+  // Claim won: take the $100 off the balance, conditional on it
+  // still being there. If it is not (two taps at once), release
+  // the claim again — never charge for a buyer not kept.
+  const deducted = await env.DB.prepare(
+    "UPDATE agents SET balance_cents = balance_cents - ? WHERE id = ? AND balance_cents >= ?"
+  ).bind(LEAD_PRICE_CENTS, agent.id, LEAD_PRICE_CENTS).run();
+  if (deducted.meta.changes !== 1) {
+    await env.DB.prepare(
+      "UPDATE buyers SET claimed_by = NULL, claimed_at = NULL WHERE id = ? AND claimed_by = ?"
+    ).bind(buyerId, agent.id).run();
+    return json({ ok: false, error: "not-enough-balance", leadPriceCents: LEAD_PRICE_CENTS }, 403);
+  }
+  try {
+    await env.DB.prepare(
+      "INSERT INTO ledger (agent_id, kind, amount_cents, buyer_id, note, created_at) " +
+      "VALUES (?, 'claim', ?, ?, '', ?)"
+    ).bind(agent.id, -LEAD_PRICE_CENTS, buyerId, now).run();
+  } catch (e) {
+    // The ledger row is the audit trail, the balance is the truth.
+    // If writing it fails, give the money back and release the
+    // claim rather than leave a charge with no record.
+    await env.DB.prepare(
+      "UPDATE agents SET balance_cents = balance_cents + ? WHERE id = ?"
+    ).bind(LEAD_PRICE_CENTS, agent.id).run();
+    await env.DB.prepare(
+      "UPDATE buyers SET claimed_by = NULL, claimed_at = NULL WHERE id = ? AND claimed_by = ?"
+    ).bind(buyerId, agent.id).run();
+    return json({ ok: false, error: "server-error" }, 500);
+  }
+  const after = await env.DB.prepare(
+    "SELECT balance_cents FROM agents WHERE id = ?"
+  ).bind(agent.id).first();
+  return json({ ok: true, buyerId, claimedBy: agent.id, claimedAt: now, balanceCents: after ? after.balance_cents : 0 });
 }
 
 /* ---- handover: full details only for the agent who claimed it ---- */
 
 async function handover(request, env, agent) {
+  await releaseExpired(env);
   const buyerId = new URL(request.url).searchParams.get("buyer") || "";
   const buyer = await env.DB.prepare("SELECT * FROM buyers WHERE id = ?").bind(buyerId).first();
   if (!buyer) return json({ ok: false, error: "no-such-buyer" }, 404);
@@ -290,6 +412,7 @@ function buyerRow(b) {
 /* ---- my leads: buyers this agent claimed, with outcomes ---- */
 
 async function myLeads(request, env, agent) {
+  await releaseExpired(env);
   const { results } = await env.DB.prepare(
     "SELECT * FROM buyers WHERE claimed_by = ? ORDER BY claimed_at"
   ).bind(agent.id).all();
@@ -298,7 +421,7 @@ async function myLeads(request, env, agent) {
   ).bind(agent.id).all();
   const outcomes = {};
   for (const o of outs) outcomes[o.buyer_id] = o.outcome;
-  return json({ ok: true, leads: results.map(buyerRow), outcomes });
+  return json({ ok: true, leads: results.map(buyerRow), outcomes, balanceCents: agent.balance_cents, leadPriceCents: LEAD_PRICE_CENTS });
 }
 
 /* ---- outcome: only the agent who claimed the buyer may set it ---- */

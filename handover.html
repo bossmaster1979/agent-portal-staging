@@ -47,7 +47,7 @@
       el.innerHTML =
         '<h1>Handover sheet — <span class="sample-tag">SAMPLE</span> Ready buyer ' + esc(buyer.id) + '</h1>' +
         '<div class="gold-rule"></div>' +
-        '<p>For ' + esc(agent.name) + '. Claimed ' + esc(res.claimedAt) + '.</p>' +
+        '<p>For ' + esc(agent.name) + '. Claimed ' + esc(fmtWhen(res.claimedAt)) + '.</p>' +
         '<table>' +
         '<tr><th>First name</th><td>' + esc(buyer.firstName) + ' (SAMPLE — made-up name)</td></tr>' +
         '<tr><th>Phone</th><td>' + esc(buyer.phone) + ' (SAMPLE — made-up number)</td></tr>' +

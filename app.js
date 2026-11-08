@@ -13,17 +13,56 @@
  *    thing that talks to the shared database.
  *
  * The rules are the same in both modes: masked board, one buyer to
- * one agent, handover sheet only after a claim, outcomes on My leads. */
+ * one agent, handover sheet only after a claim, outcomes on My leads.
+ * Money rules (Nov 7, 2026 — per-lead, free to join): joining costs
+ * nothing; each claimed buyer costs $100, taken off the agent's
+ * balance (topped up by Zelle, $500 at a time); at most 3 buyers
+ * waiting for a call; a buyer with no call in 48 hours goes back on
+ * the board and the $100 goes back to the balance. In demo mode the
+ * balance starts at $500 on this phone only — no real money moves. */
 
 /* THE ONE SETTING: put the Worker address here to go live, e.g.
    "https://agent-portal-worker.<your-name>.workers.dev".
    Leave it empty ("") and the app runs in DEMO mode. */
-const APP_CONFIG = { apiBase: "https://agent-portal-worker-staging.bossmaster1979.workers.dev" };
+const APP_CONFIG = { apiBase: "" };
 
 const LS_AGENT = "agentPortal.agent";
 const LS_CLAIMS = "agentPortal.claims";     // demo mode: { buyerId: { agentId, agentName, claimedAt } }
 const LS_OUTCOMES = "agentPortal.outcomes"; // demo mode: { buyerId: "called" | "no-answer" | "closed" }
 const LS_TOKEN = "agentPortal.token";       // live mode: session token from the Worker
+const LS_BALANCE = "agentPortal.balance";   // demo mode: balance in cents, starts at $500
+
+// Money — same numbers as the Worker (worker.js). Cents, never floats.
+const LEAD_PRICE_CENTS = 10000;            // $100 per claimed buyer
+const TOPUP_CENTS = 50000;                 // $500 per Zelle top-up
+const MAX_ACTIVE_CLAIMS = 3;               // buyers waiting for a call
+const CLAIM_CALL_WINDOW_MS = 48 * 60 * 60 * 1000; // call within 2 days
+
+function fmtMoney(cents) { return "$" + Math.round(cents / 100); }
+function fmtWhen(iso) {
+  try { const d = new Date(iso); if (!isNaN(d)) return d.toLocaleString(); } catch (e) { /* fall through */ }
+  return String(iso || "");
+}
+
+/* ---- demo-mode balance (this phone only; live mode reads it from the Worker) ----
+   Keyed by agent: each agent has their own demo balance, like live mode. */
+function balanceKey(agentId) { return LS_BALANCE + "." + (agentId || "none"); }
+function getBalanceFor(agentId) {
+  try {
+    const v = localStorage.getItem(balanceKey(agentId));
+    if (v === null) { localStorage.setItem(balanceKey(agentId), String(TOPUP_CENTS)); return TOPUP_CENTS; }
+    return parseInt(v, 10) || 0;
+  } catch (e) { return TOPUP_CENTS; }
+}
+function setBalanceFor(agentId, cents) { try { localStorage.setItem(balanceKey(agentId), String(cents)); } catch (e) { /* keep going */ } }
+function getBalance() {
+  const a = getAgent();
+  return getBalanceFor(a ? a.id : null);
+}
+function setBalance(cents) {
+  const a = getAgent();
+  setBalanceFor(a ? a.id : null, cents);
+}
 
 function isLive() { return !!APP_CONFIG.apiBase; }
 
@@ -106,36 +145,78 @@ function signOut() {
   location.href = "index.html";
 }
 
+/* ---- demo-mode expiry: a claim with no outcome in 48 hours goes
+   back on the board and the $100 goes back to the balance — same
+   rule as the Worker, run here whenever the board or my leads load. */
+function releaseExpiredDemo() {
+  try {
+    const claims = getClaims();
+    const outcomes = getOutcomes();
+    let changed = false;
+    for (const id of Object.keys(claims)) {
+      const c = claims[id];
+      const t = Date.parse(c && c.claimedAt);
+      if (!outcomes[id] && !isNaN(t) && Date.now() - t > CLAIM_CALL_WINDOW_MS) {
+        delete claims[id];
+        // The $100 goes back to the agent who held the claim, not
+        // whoever happens to be signed in now.
+        setBalanceFor(c.agentId, getBalanceFor(c.agentId) + LEAD_PRICE_CENTS);
+        changed = true;
+      }
+    }
+    if (changed) saveClaims(claims);
+  } catch (e) { /* keep going with the board as it is */ }
+}
+/* Demo active claims: claimed by this agent, no outcome recorded yet. */
+function activeClaimsDemo(agentId) {
+  const claims = getClaims();
+  const outcomes = getOutcomes();
+  return Object.keys(claims).filter(id =>
+    claims[id] && claims[id].agentId === agentId && !outcomes[id]).length;
+}
+
 /* ---- claims ----
-   Demo mode (sync, this phone only). Kept sync so the Playwright
-   test can call claimBuyer() directly. */
+   Demo mode (sync, this phone only). Returns { ok } or
+   { ok:false, error } — error is "already-claimed",
+   "not-enough-balance", or "claim-limit". */
 function canClaim(buyerId) {
   const agent = getAgent();
   if (!agent) return false;
   const buyer = buyerById(buyerId);
   if (!buyer) return false;
   if (getClaims()[buyerId]) return false;
+  if (activeClaimsDemo(agent.id) >= MAX_ACTIVE_CLAIMS) return false;
+  if (getBalance() < LEAD_PRICE_CENTS) return false;
   return true;
 }
 function claimBuyer(buyerId) {
   const agent = getAgent();
-  if (!agent) { location.href = "index.html"; return false; }
-  if (!canClaim(buyerId)) return false;
+  if (!agent) { location.href = "index.html"; return { ok: false, error: "not-signed-in" }; }
+  if (!buyerById(buyerId)) return { ok: false, error: "no-such-buyer" };
+  if (getClaims()[buyerId]) return { ok: false, error: "already-claimed" };
+  if (activeClaimsDemo(agent.id) >= MAX_ACTIVE_CLAIMS) {
+    return { ok: false, error: "claim-limit", maxActiveClaims: MAX_ACTIVE_CLAIMS };
+  }
+  if (getBalance() < LEAD_PRICE_CENTS) {
+    return { ok: false, error: "not-enough-balance", leadPriceCents: LEAD_PRICE_CENTS, balanceCents: getBalance() };
+  }
   const claims = getClaims();
-  claims[buyerId] = { agentId: agent.id, agentName: agent.name, claimedAt: new Date().toLocaleString() };
+  claims[buyerId] = { agentId: agent.id, agentName: agent.name, claimedAt: new Date().toISOString() };
   saveClaims(claims);
-  return true;
+  setBalance(getBalance() - LEAD_PRICE_CENTS);
+  return { ok: true, balanceCents: getBalance() };
 }
 /* Live mode (async): the Worker decides, with its one conditional
    UPDATE — exactly one agent wins. Returns { ok } or { ok:false,
-   error: "already-claimed" | "not-signed-in" }. */
+   error: "already-claimed" | "not-enough-balance" | "claim-limit" |
+   "not-signed-in" }. */
 async function claimBuyerLive(buyerId) {
   const { status, data } = await api("/api/claim", {
     method: "POST", body: JSON.stringify({ buyerId }),
   });
   if (status === 401) return { ok: false, error: "not-signed-in" };
-  if (data.ok) return { ok: true };
-  return { ok: false, error: data.error || "already-claimed" };
+  if (data.ok) return { ok: true, balanceCents: data.balanceCents };
+  return { ok: false, error: data.error || "already-claimed", balanceCents: data.balanceCents };
 }
 
 function setOutcome(buyerId, outcome) {
@@ -163,12 +244,23 @@ function maskedBuyer(b) {
 }
 async function loadBoardData() {
   if (!isLive()) {
-    return { buyers: BUYERS.map(maskedBuyer), claims: getClaims() };
+    releaseExpiredDemo();
+    return {
+      buyers: BUYERS.map(maskedBuyer), claims: getClaims(),
+      balanceCents: getBalance(), leadPriceCents: LEAD_PRICE_CENTS,
+      maxActiveClaims: MAX_ACTIVE_CLAIMS,
+      activeClaims: getAgent() ? activeClaimsDemo(getAgent().id) : 0,
+    };
   }
   const { status, data } = await api("/api/board");
   if (status === 401) return { notSignedIn: true, buyers: [], claims: {} };
   if (!data.ok) return { buyers: [], claims: {}, loadError: true };
-  return { buyers: data.buyers, claims: {} }; // live board lists unclaimed only
+  // live board lists unclaimed only
+  return {
+    buyers: data.buyers, claims: {},
+    balanceCents: data.balanceCents, leadPriceCents: data.leadPriceCents,
+    maxActiveClaims: data.maxActiveClaims, activeClaims: data.activeClaims,
+  };
 }
 async function loadHandoverData(buyerId) {
   const buyer = buyerById(buyerId);
@@ -193,15 +285,16 @@ async function loadHandoverData(buyerId) {
 async function loadMyLeadsData() {
   const agent = getAgent();
   if (!isLive()) {
+    releaseExpiredDemo();
     const claims = getClaims();
     const outcomes = getOutcomes();
     const mine = BUYERS.filter(b => claims[b.id] && claims[b.id].agentId === agent.id);
-    return { leads: mine.map(b => Object.assign({}, b, { claimedAt: claims[b.id].claimedAt })), outcomes };
+    return { leads: mine.map(b => Object.assign({}, b, { claimedAt: claims[b.id].claimedAt })), outcomes, balanceCents: getBalance(), leadPriceCents: LEAD_PRICE_CENTS };
   }
   const { status, data } = await api("/api/my-leads");
   if (status === 401) return { notSignedIn: true, leads: [], outcomes: {} };
   if (!data.ok) return { leads: [], outcomes: {}, loadError: true };
-  return { leads: data.leads, outcomes: data.outcomes };
+  return { leads: data.leads, outcomes: data.outcomes, balanceCents: data.balanceCents, leadPriceCents: data.leadPriceCents };
 }
 
 function agentById(id) { return AGENTS.find(a => a.id === id) || null; }

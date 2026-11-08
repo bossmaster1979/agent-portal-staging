@@ -17,7 +17,11 @@ no Cloudflare account was touched by this build.
 - `POST /api/claim` — ONE conditional UPDATE ("mark claimed only if
   nobody claimed it yet"), so exactly one agent wins even if two tap
   Claim at the same second. D1 has no BEGIN/COMMIT transactions, so
-  this single step is the safe way.
+  this single step is the safe way. A claim costs $100, taken off the
+  agent's balance (see top-ups below); at most 3 buyers waiting for a
+  call per agent; a buyer with no outcome in 48 hours goes back on
+  the board and the $100 is refunded. Every money move is written to
+  the `ledger` table.
 - `GET /api/handover?buyer=X` — full details only for the agent who
   claimed that buyer.
 - `GET /api/my-leads` — buyers this agent claimed, with outcomes.
@@ -83,6 +87,29 @@ Two gotchas learned Nov 7, 2026 (sandbox run — both bit us):
    `ps aux | grep "wrangler dev"`), confirm nothing is on 8787,
    then start it again.
 
+## Top-ups — Bge only, by hand (per-lead model, Nov 7, 2026)
+
+Joining is free; there is no monthly charge. An agent tops up **$500
+by Zelle** (Bge gives the address one-to-one after approval — never
+on the public page). Bge checks the $500 landed in his bank, then
+adds it to that agent's balance with one command:
+
+```sh
+npx wrangler d1 execute agent-portal --remote --command \
+  "UPDATE agents SET balance_cents = balance_cents + 50000 WHERE id = '<agent-id>'; INSERT INTO ledger (agent_id, kind, amount_cents, note, created_at) VALUES ('<agent-id>', 'topup', 50000, 'Zelle \$500 — checked in bank', datetime('now'));"
+```
+
+(For the local test database, use `--local` instead of `--remote`.)
+Check the books any time with:
+
+```sh
+npx wrangler d1 execute agent-portal --remote --command "SELECT agent_id, kind, amount_cents, buyer_id, created_at FROM ledger ORDER BY id;"
+```
+
+The agent's balance must equal the sum of their ledger rows. If an
+agent leaves, Bge sends the unused balance back by Zelle and sets
+`approved = 0` (below).
+
 ## Switching an agent off
 
 No code change, no redeploy:
@@ -111,6 +138,8 @@ Their token stops working at once, and sign-in is refused.
   (see the research file).
 - The app does NOT check Zelle (owner decision, Nov 6, 2026 —
   Stripe dropped for this billing). Bge looks in his bank, sees
-  the $499 Zelle payment arrived, and only then hands over
-  a passcode. If a payment is missed, Bge switches
-  the agent off by hand (see above).
+  the $500 Zelle top-up arrived, and adds $500 to that agent's
+  balance by hand (see top-ups above). The passcode is handed over
+  when Bge approves the agent; claiming is gated by the balance.
+  If an agent leaves, Bge sends the unused balance back by Zelle
+  and switches the agent off by hand (see above).

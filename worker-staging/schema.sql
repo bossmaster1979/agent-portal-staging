@@ -16,7 +16,12 @@ CREATE TABLE IF NOT EXISTS agents (
   role TEXT NOT NULL DEFAULT '',
   passcode_hash TEXT NOT NULL DEFAULT 'NOT-SET',
   passcode_salt TEXT NOT NULL DEFAULT '',
-  approved INTEGER NOT NULL DEFAULT 1
+  approved INTEGER NOT NULL DEFAULT 1,
+  -- Money, per-lead model (Nov 7, 2026 — replaces $499/month):
+  -- balance in cents. An agent tops up by Zelle ($500 = 50000);
+  -- Bge adds it by hand after checking the bank. Every claim
+  -- takes $100 (10000 cents) off. No card is ever charged here.
+  balance_cents INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS buyers (
@@ -57,6 +62,23 @@ CREATE TABLE IF NOT EXISTS failed_signins (
   agent_id TEXT PRIMARY KEY,
   attempts INTEGER NOT NULL DEFAULT 0,
   locked_until INTEGER NOT NULL DEFAULT 0
+);
+
+-- Money ledger: every cent in or out, so Bge can check the books.
+-- kind: 'topup' (Bge adds $500 after the Zelle lands, +50000),
+-- 'claim' (agent claims a buyer, -10000), 'refund' (a buyer went
+-- back on the board uncalled after 48 hours, +10000).
+-- amount_cents is signed: positive = money in to the agent's
+-- balance, negative = money out. The agent's balance is the sum
+-- of their ledger rows, and must match agents.balance_cents.
+CREATE TABLE IF NOT EXISTS ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  buyer_id TEXT,
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
 );
 
 -- Agents: the two SAMPLE agents, same as data.js. The first real
