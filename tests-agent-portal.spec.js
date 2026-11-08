@@ -1,25 +1,39 @@
 // Agent Portal — fail-able check, Playwright. Run from
 // ~/workspace/projects/reel-DfWR5BWiGct/playwright-test with:
 //   npx playwright test tests/agent-portal.spec.js
-// Needs the app served at http://localhost:8130 (python3 -m http.server 8130
-// from ~/workspace/projects/agent-portal-app).
+// Needs TWO copies of the app (the source app.js now ships the
+// production Worker address, so serving the source directly is LIVE
+// mode against production — never do that for the demo tests):
+//   DEMO copy at http://localhost:8130 (apiBase empty):
+//     rm -rf /tmp/agent-portal-demo && cp -r ~/workspace/projects/agent-portal-app /tmp/agent-portal-demo
+//     sed -i 's#apiBase: "https://agent-portal-worker.bossmaster1979.workers.dev"#apiBase: ""#' /tmp/agent-portal-demo/app.js
+//     python3 -m http.server 8130 --directory /tmp/agent-portal-demo
 //
 // The last test ("live: ...") also needs:
 //   1. The Worker running locally: cd ~/workspace/projects/agent-portal-app/worker
 //      && npx wrangler dev --local --port 8787 (after `wrangler d1 execute
 //      agent-portal --local --file schema.sql` once, and test passcodes set
 //      with hash-passcode.mjs — see worker/README.md. Test passcodes live
-//      ONLY in the local D1 database, never in this repo: set your own
-//      with `node hash-passcode.mjs <agent-id> <passcode>` and the UPDATE
-//      line it prints, then use those same passcodes below.
+//      ONLY in the local D1 database as hashes, and the two values below
+//      are staging/local-only test values — they do NOT work against the
+//      production Worker (production passcodes are NOT-SET until Bge
+//      approves a real agent, verified Nov 7, 2026). Set them locally
+//      with `node hash-passcode.mjs <agent-id> <passcode>` and run ONLY
+//      the FIRST UPDATE it prints (passcode_hash + passcode_salt) — the
+//      helper also prints a switch-off UPDATE (approved = 0); running
+//      that one locks the agent out of sign-in entirely (caught in
+//      Sandbox 1, Nov 7, 2026).
 //      The test below expects the passcodes to be "test-passcode-456"
 //      for maria and "test-passcode-789" for david — set exactly those
 //      two locally, or edit the two fill() lines to match yours.
-//   2. A LIVE copy of the app (same files, apiBase pointed at the Worker)
-//      served at http://localhost:8131:
+//   2. A LIVE copy of the app (same files, apiBase pointed at the local
+//      Worker) served at http://localhost:8131:
 //        rm -rf /tmp/agent-portal-live && cp -r ~/workspace/projects/agent-portal-app /tmp/agent-portal-live
-//        sed -i 's#apiBase: ""#apiBase: "http://localhost:8787"#' /tmp/agent-portal-live/app.js
+//        sed -i 's#apiBase: "https://agent-portal-worker.bossmaster1979.workers.dev"#apiBase: "http://localhost:8787"#' /tmp/agent-portal-live/app.js
 //        python3 -m http.server 8131 --directory /tmp/agent-portal-live
+//      (The sed must match the production URL now in app.js — the old
+//      `apiBase: ""` pattern no longer matches, and a missed sed would
+//      point the "live" copy at the PRODUCTION Worker.)
 //   3. Fresh local D1 state before the run (claims from earlier runs
 //      would hide buyers). Wipe + reseed first if the schema changed
 //      (balance_cents + ledger arrived Nov 7, 2026 — an old local D1
@@ -58,6 +72,7 @@ test("portal: sign-in, board masked, balance, claims deduct $100, cap of 3, hand
   await expect(page.locator('input[type="password"]')).toHaveCount(2);
   await expect(page.locator("#mode-note")).toContainText("Demo mode");
   await expect(page.locator("body")).toContainText("passcode is not checked");
+  await expect(page.locator("body")).toContainText("Bge is your lead provider");
 
   // 2. Sign in as Maria (passcode filled, not checked in demo mode) ->
   // board with 4 masked SAMPLE buyers, no phone/email visible, balance $500.
@@ -205,6 +220,8 @@ test("portal: billing page shows $100 per buyer by Zelle, free to join, address 
   await expect(page.locator("body")).toContainText("never shown on this page");
   await expect(page.locator("body")).toContainText("no card form on this page");
   await expect(page.locator("body")).toContainText("Top up $500 by Zelle");
+  await expect(page.locator("body")).toContainText("sends you your passcode");
+  await expect(page.locator("body")).toContainText("never written in this app");
   await expect(page.locator("body")).toContainText("3 buyers at a time");
   await expect(page.locator("body")).toContainText("Call within 2 days");
   await expect(page.locator("body")).toContainText("handover sheet");

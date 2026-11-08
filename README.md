@@ -212,19 +212,21 @@ gives the Zelle address to each approved agent one-to-one, never on
 the public page.
 The app does NOT check Zelle: Bge looks in his bank, sees the $500
 top-up arrived, and adds $500 to that agent's balance by hand (see
-`worker/README.md`). The passcode is handed over when Bge approves
-the agent; claiming is gated by the balance, not by the passcode.
+`worker/README.md`). The passcode is sent by Bge by phone or text
+after that first $500 top-up is checked — never before, never written
+in the app; claiming is gated by the balance, not by the passcode.
 Zelle does not charge on its own — the agent sends $500 each time
 they want to top up, and Bge checks it arrived. If an agent leaves,
 their unused balance is sent back to them by Zelle.
 
 ## What is NOT done (honest gaps)
 
-- **Shared store is built but not live.** The Worker + D1 code is
-  written and tested locally (`wrangler dev`, local D1), but it is
-  NOT deployed and the app still runs in demo mode (claims on one
-  phone only) until the owner says go. The cross-phone claim test
-  ran against the local Worker, not a deployed one.
+- **Shared store is LIVE since Nov 7, 2026 (owner's go).** The
+  production Worker + D1 are deployed and the preview points at them
+  (sw v7; v8 with the passcode-at-payment copy). The cross-phone claim
+  test ran against the local Worker and the staging Worker, not the
+  production one — production sign-in is still untested with a real
+  agent because no real agent exists yet.
 - **Polling, not instant.** In live mode phones re-read the board
   every 25 seconds. A claim shows on another phone a few seconds
   later, not the same instant. D1 read-after-write delay is

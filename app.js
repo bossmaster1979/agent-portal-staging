@@ -21,9 +21,9 @@
  * the board and the $100 goes back to the balance. In demo mode the
  * balance starts at $500 on this phone only — no real money moves. */
 
-/* THE ONE SETTING: put the Worker address here to go live, e.g.
-   "https://agent-portal-worker.<your-name>.workers.dev".
-   Leave it empty ("") and the app runs in DEMO mode. */
+/* THE ONE SETTING: the live production Worker (Nov 7, 2026 — owner's
+   go to deploy live). Empty ("") means DEMO mode; never leave it
+   empty in production, and never point production at staging. */
 const APP_CONFIG = { apiBase: "https://agent-portal-worker-staging.bossmaster1979.workers.dev" };
 
 const LS_AGENT = "agentPortal.agent";

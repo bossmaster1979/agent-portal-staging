@@ -1,6 +1,6 @@
 /* Agent Portal service worker — saves the app shell on the phone so the
    app opens fast and works offline. Version the cache name when files change. */
-const CACHE = "agent-portal-v6";
+const CACHE = "agent-portal-v8";
 const SHELL = [
   "index.html",
   "board.html",
