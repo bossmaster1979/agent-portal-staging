@@ -38,6 +38,8 @@
     if (res.status === "not-signed-in") { location.href = "index.html"; return; }
     if (res.status === "no-such-buyer") {
       el.innerHTML = "<h1>No such buyer</h1><p>This handover sheet does not exist. Go back to the board.</p>";
+    } else if (res.status === "load-error") {
+      el.innerHTML = "<h1>Could not load the sheet</h1><p>The server did not answer. Check your connection and try again.</p><p><a class=\"btn\" href=\"\" onclick=\"location.reload(); return false;\">Try again</a> <a class=\"btn secondary\" href=\"board.html\">Back to the board</a></p>";
     } else if (res.status === "not-claimed") {
       el.innerHTML = "<h1>Not claimed yet</h1><p>This buyer is still on the board. Claim them first — the handover sheet only shows after a claim.</p><p><a class=\"btn\" href=\"board.html\">Go to the board</a></p>";
     } else if (res.status === "already-claimed") {
@@ -65,6 +67,14 @@
         '<tr><th>Do-not-call check</th><td>Checked ' + esc(buyer.scrubDate) + '</td></tr>' +
         '</table>' +
         '<p>From here, the call, the home search, the showing, the offer, and the close are yours. Make the booked call on your own phone and number, inside 8am–9pm Pacific.</p>' +
+        '<h2>What to say on the call</h2>' +
+        '<p>Keep it short. You are calling at the time they booked.</p>' +
+        '<ol>' +
+        '<li>“Hi, this is ' + esc(agent.name) + ' — we booked a call for now about your home search.”</li>' +
+        '<li>“Is now still a good time for a quick call?”</li>' +
+        '<li>“Tell me what matters most in the home you are looking for.”</li>' +
+        '<li>Agree the next step together — a time to look at homes, or a time to call back.</li>' +
+        '</ol>' +
         '<p><a class="btn" href="my-leads.html">See my leads</a></p>';
     }
   })();

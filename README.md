@@ -35,7 +35,7 @@ phone) makes it open fast and work offline.
 | `board.html` | Masked ready-buyer board — 4 SAMPLE buyers, claim buttons |
 | `my-leads.html` | Buyers you claimed, with outcome buttons |
 | `handover.html` | Handover sheet for one claimed buyer (SAMPLE data) |
-| `billing.html` | Billing — $499/month, paid by Zelle, address never on the page |
+| `billing.html` | Billing — free to join, $100 per claimed buyer, paid by Zelle, address never on the page |
 | `about.html` | About the portal — what it is, how it works, no names |
 | `install.html` | How to add the app to your home screen (iPhone + Android) |
 | `styles.css` | Gold/dark styling, phone first |
@@ -113,7 +113,7 @@ My leads shows buyer A, "Called" recorded and still there after
 reload → second agent (David) sees no buyer A and gets
 "Already claimed" with no details →
 signed-out visitor to board/my-leads/handover is sent to sign-in →
-billing page shows $499/mo by Zelle, address never on the page →
+billing page shows $100 per buyer by Zelle, address never on the page →
 about page says "separate project", shows how the portal works, and
 has no phone or email link anywhere → install page shows the
 iPhone steps → manifest valid, standalone, both icons load (200),
@@ -173,19 +173,50 @@ To go live later (owner's tap only): follow `worker/README.md`,
 then set the Worker address as `APP_CONFIG.apiBase` at the top of
 `app.js` and redeploy the app. Until then the app stays in demo mode.
 
-## Billing — $499 a month, payment NOT switched on
+## What changed — Nov 7, 2026 (per-lead model, replaces $499/month)
 
-See `billing.html`. $499/month per agent, paid by Zelle: ready buyers,
-one buyer to one agent, handover sheet, booked call. Cancel anytime.
-Payment is NOT switched on yet — no charge is made, and the Zelle
-address is still to come (business bank in progress, expected Mon
-Nov 9, 2026). When it opens, Bge gives the Zelle address to each
-approved agent one-to-one, never on the public page.
-The app does NOT check Zelle: Bge looks in his bank, sees the $499
-arrived, and only then hands over a passcode. If a payment is missed,
-Bge switches the agent off by hand in D1 (see `worker/README.md`).
-Zelle does not bill monthly on its own — the agent sends $499 each
-month by the same date, and Bge checks it arrived.
+Owner decision, Nov 7, 2026 evening: **free to join, $100 per ready
+buyer claimed** — no monthly charge. The $499/month model from Nov 5–6
+is dropped; nothing was ever charged under it.
+- **Balance + ledger in the Worker.** Each agent has a balance in
+  cents. They top up $500 by Zelle; Bge adds it by hand after
+  checking the bank (see `worker/README.md` for the exact command).
+  Every claim takes $100 off. A `ledger` table records every top-up,
+  claim, and refund, so the books can be checked.
+- **Claim cap: 3 buyers at a time** waiting for a call. Recording
+  any outcome frees the slot. This stops one agent holding the
+  whole board.
+- **48-hour call rule.** A buyer with no outcome recorded in 48
+  hours goes back on the board (checked lazily on every board /
+  claim / my-leads / handover read) and the $100 goes back to the
+  agent's balance.
+- **Billing page rewritten** (`billing.html`): free to join, $100 per
+  claim, $500 top-ups by Zelle, the cap, the 2-day rule, and unused
+  balance returned on leaving. The Zelle address is still never on
+  the page.
+- **Board + My leads show the balance** ("Your balance: $X. Each
+  claim costs $100.") with a top-up link. Claim buttons say the
+  price: "Claim this buyer — $100". Demo mode starts with a $500
+  balance on the phone, so the flow can be tried with no real money.
+- **Tests updated** for the new model (billing wording, demo
+  balance + cap, live balance / not-enough / cap / expiry).
+
+## Billing — $100 per buyer, payment NOT switched on
+
+See `billing.html`. Free to join, no monthly charge; $100 per ready
+buyer claimed, paid by Zelle: ready buyers, one buyer to one agent,
+handover sheet, booked call. Payment is NOT switched on yet — no
+charge is made, and the Zelle address is still to come (business
+bank in progress, expected Mon Nov 9, 2026). When it opens, Bge
+gives the Zelle address to each approved agent one-to-one, never on
+the public page.
+The app does NOT check Zelle: Bge looks in his bank, sees the $500
+top-up arrived, and adds $500 to that agent's balance by hand (see
+`worker/README.md`). The passcode is handed over when Bge approves
+the agent; claiming is gated by the balance, not by the passcode.
+Zelle does not charge on its own — the agent sends $500 each time
+they want to top up, and Bge checks it arrived. If an agent leaves,
+their unused balance is sent back to them by Zelle.
 
 ## What is NOT done (honest gaps)
 
@@ -214,8 +245,9 @@ month by the same date, and Bge checks it arrived.
 - Demo mode on one phone: claims and outcomes live in that phone's
   browser only. Anyone with the demo can sign in as any agent name
   (passcode not checked in demo mode).
-- No per-buyer fee is charged here: the portal charges $499 a month
-  per agent, and nothing per buyer. Payment stays Bge's tap, by
-  Zelle, as on the billing page.
+- Per-buyer fee, not monthly: the portal charges $100 per claimed
+  buyer, taken off the agent's balance (topped up $500 at a time by
+  Zelle). Joining is free. Payment stays Bge's tap, by Zelle, as on
+  the billing page.
 - Not published or deployed beyond the approved GitHub Pages
   preview. Going live with the Worker is the owner's tap only.

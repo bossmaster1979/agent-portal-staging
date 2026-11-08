@@ -107,10 +107,18 @@ async function api(path, opts) {
   // cache: "no-store" matters: without it the browser can serve a
   // stale board from its HTTP cache and a claim by another agent
   // would not show up until the cache expired.
-  const res = await fetch(APP_CONFIG.apiBase + path, Object.assign({
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + getToken() },
-  }, opts || {}));
+  let res;
+  try {
+    res = await fetch(APP_CONFIG.apiBase + path, Object.assign({
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + getToken() },
+    }, opts || {}));
+  } catch (e) {
+    // No answer from the server at all (offline, server hiccup).
+    // Callers must render a "could not load" message — never let a
+    // page hang on "Loading…" forever.
+    return { status: 0, data: { ok: false, error: "network" } };
+  }
   let data = {};
   try { data = await res.json(); } catch (e) { /* empty answer */ }
   return { status: res.status, data };
@@ -263,9 +271,10 @@ async function loadBoardData() {
   };
 }
 async function loadHandoverData(buyerId) {
-  const buyer = buyerById(buyerId);
-  if (!buyer) return { status: "no-such-buyer" };
   if (!isLive()) {
+    // Demo mode: the phone's own lists are the whole truth.
+    const buyer = buyerById(buyerId);
+    if (!buyer) return { status: "no-such-buyer" };
     const claims = getClaims();
     if (!claims[buyerId]) return { status: "not-claimed" };
     if (claims[buyerId].agentId !== getAgent().id) {
@@ -273,8 +282,13 @@ async function loadHandoverData(buyerId) {
     }
     return { status: "ok", buyer, claimedAt: claims[buyerId].claimedAt };
   }
+  // Live mode: the server is the source of truth. Never check the
+  // phone's sample list first — it only holds the 4 sample buyers,
+  // while the server can hold more (F, G). Checking it first made
+  // every server-only buyer read as "no such buyer".
   const { status, data } = await api("/api/handover?buyer=" + encodeURIComponent(buyerId));
   if (status === 401) return { status: "not-signed-in" };
+  if (status === 0) return { status: "load-error" };
   if (!data.ok) {
     if (data.error === "not-claimed") return { status: "not-claimed" };
     if (data.error === "already-claimed") return { status: "already-claimed", claimedByName: data.claimedByName };
@@ -323,6 +337,11 @@ function renderTopbar() {
       ? "Live mode — signed in through the shared server, claims are shared with all agents."
       : "Demo mode — no server connected. Sign-in is not checked and claims stay on this phone only.";
   }
+  // The sign-in page also carries a hardcoded demo paragraph (id
+  // demo-note). In live mode it contradicts the live note above, so
+  // hide it there; in demo mode it stays visible.
+  const demo = document.getElementById("demo-note");
+  if (demo) demo.style.display = isLive() ? "none" : "";
 }
 
 /* Ask the browser about installing the app. Works on Android Chrome;
